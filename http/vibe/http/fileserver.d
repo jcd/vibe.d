@@ -9,15 +9,19 @@ module vibe.http.fileserver;
 
 import vibe.core.file;
 import vibe.core.log;
+import vibe.core.stream : RandomAccessStream;
 import vibe.http.server;
 import vibe.inet.message;
 import vibe.inet.mimetypes;
 import vibe.inet.url;
+import vibe.internal.interfaceproxy;
 
 import std.conv;
 import std.datetime;
 import std.digest.md;
 import std.string;
+
+@safe:
 
 
 /**
@@ -42,7 +46,7 @@ HTTPServerRequestDelegateS serveStaticFiles(Path local_path, HTTPFileServerSetti
 	if (!settings.serverPathPrefix.endsWith("/")) settings.serverPathPrefix ~= "/";
 
 	void callback(scope HTTPServerRequest req, scope HTTPServerResponse res)
-	{
+	@safe {
 		string srv_path;
 		if (auto pp = "pathMatch" in req.params) srv_path = *pp;
 		else if (req.path.length > 0) srv_path = req.path;
@@ -361,13 +365,13 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 		fil = openFile(path);
 	} catch( Exception e ){
 		// TODO: handle non-existant files differently than locked files?
-		logDebug("Failed to open file %s: %s", pathstr, e.toString());
+		logDebug("Failed to open file %s: %s", pathstr, () @trusted { return e.toString(); } ());
 		return;
 	}
 	scope(exit) fil.close();
 
 	if (pce && !encodedFilepath.length)
-		res.bodyWriter.write(fil);
-	else res.writeRawBody(fil);
+		res.bodyWriter.write(fil.asInterface!RandomAccessStream);
+	else res.writeRawBody(fil.asInterface!RandomAccessStream);
 	logTrace("sent file %d, %s!", fil.size, res.headers["Content-Type"]);
 }
